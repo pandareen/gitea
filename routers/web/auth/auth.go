@@ -28,6 +28,7 @@ import (
 	"code.gitea.io/gitea/modules/web"
 	"code.gitea.io/gitea/modules/web/middleware"
 	auth_service "code.gitea.io/gitea/services/auth"
+	ldap_service "code.gitea.io/gitea/services/auth/source/ldap"
 	"code.gitea.io/gitea/services/auth/source/oauth2"
 	"code.gitea.io/gitea/services/context"
 	"code.gitea.io/gitea/services/externalaccount"
@@ -321,8 +322,10 @@ func SignInPost(ctx *context.Context) {
 	}
 
 	// Now handle 2FA:
+	isLDAPManagedTOTP := ldap_service.SourceProvidesTOTPSecret(source)
+
 	// First of all if the source can skip local two fa we're done
-	if source.TwoFactorShouldSkip() {
+	if source.TwoFactorShouldSkip() && !isLDAPManagedTOTP {
 		handleSignIn(ctx, u, form.Remember)
 		return
 	}
@@ -343,6 +346,10 @@ func SignInPost(ctx *context.Context) {
 	}
 
 	if !hasTOTPtwofa && !hasWebAuthnTwofa {
+		if isLDAPManagedTOTP && setting.TwoFactorAuthEnforced {
+			ctx.RenderWithErrDeprecated(ctx.Tr("auth.twofa_required"), tplSignIn, &form)
+			return
+		}
 		// No two-factor auth configured we can sign in the user
 		handleSignIn(ctx, u, form.Remember)
 		return

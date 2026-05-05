@@ -15,6 +15,7 @@ import (
 	"code.gitea.io/gitea/modules/setting"
 	"code.gitea.io/gitea/modules/timeutil"
 	"code.gitea.io/gitea/modules/util"
+	ldap_service "code.gitea.io/gitea/services/auth/source/ldap"
 )
 
 // Ensure the struct implements the interface.
@@ -146,7 +147,8 @@ func (b *Basic) Verify(req *http.Request, w http.ResponseWriter, store DataStore
 		return nil, err
 	}
 
-	if !source.TwoFactorShouldSkip() {
+	isLDAPManagedTOTP := ldap_service.SourceProvidesTOTPSecret(source)
+	if !source.TwoFactorShouldSkip() || isLDAPManagedTOTP {
 		// Check if the user has WebAuthn registration
 		hasWebAuthn, err := auth_model.HasWebAuthnRegistrationsByUID(req.Context(), u.ID)
 		if err != nil {
@@ -156,7 +158,7 @@ func (b *Basic) Verify(req *http.Request, w http.ResponseWriter, store DataStore
 			return nil, ErrUserAuthMessage("basic authorization is not allowed while WebAuthn enrolled")
 		}
 
-		if err := validateTOTP(req, u); err != nil {
+		if err := validateTOTP(req, u, isLDAPManagedTOTP); err != nil {
 			return nil, err
 		}
 	}
@@ -167,10 +169,13 @@ func (b *Basic) Verify(req *http.Request, w http.ResponseWriter, store DataStore
 	return u, nil
 }
 
-func validateTOTP(req *http.Request, u *user_model.User) error {
+func validateTOTP(req *http.Request, u *user_model.User, required bool) error {
 	twofa, err := auth_model.GetTwoFactorByUID(req.Context(), u.ID)
 	if err != nil {
 		if auth_model.IsErrTwoFactorNotEnrolled(err) {
+			if required {
+				return util.NewInvalidArgumentErrorf("two-factor authentication is required")
+			}
 			// No 2FA enrollment for this user
 			return nil
 		}

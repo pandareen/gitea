@@ -25,6 +25,7 @@ func (source *Source) Sync(ctx context.Context, updateExisting bool) error {
 	log.Trace("Doing: SyncExternalUsers[%s]", source.AuthSource.Name)
 
 	isAttributeSSHPublicKeySet := strings.TrimSpace(source.AttributeSSHPublicKey) != ""
+	isAttributeTOTPSecretSet := strings.TrimSpace(source.AttributeTOTPSecret) != ""
 	var sshKeysNeedUpdate bool
 
 	// Find all users with this login type - FIXME: Should this be an iterator?
@@ -139,6 +140,11 @@ func (source *Source) Sync(ctx context.Context, updateExisting bool) error {
 					sshKeysNeedUpdate = true
 				}
 			}
+			if err == nil && isAttributeTOTPSecretSet {
+				if syncErr := synchronizeTOTP(ctx, usr, su.TOTPSecret); syncErr != nil {
+					log.Error("SyncExternalUsers[%s]: Error synchronizing LDAP TOTP secret for user %s: %v", source.AuthSource.Name, su.Username, syncErr)
+				}
+			}
 
 			if err == nil && source.AttributeAvatar != "" {
 				_ = user_service.UploadAvatar(ctx, usr, su.Avatar)
@@ -147,6 +153,11 @@ func (source *Source) Sync(ctx context.Context, updateExisting bool) error {
 			// Synchronize SSH Public Key if that attribute is set
 			if isAttributeSSHPublicKeySet && asymkey_model.SynchronizePublicKeys(ctx, usr, source.AuthSource, su.SSHPublicKey, source.SSHKeysAreVerified) {
 				sshKeysNeedUpdate = true
+			}
+			if isAttributeTOTPSecretSet {
+				if syncErr := synchronizeTOTP(ctx, usr, su.TOTPSecret); syncErr != nil {
+					log.Error("SyncExternalUsers[%s]: Error synchronizing LDAP TOTP secret for user %s: %v", source.AuthSource.Name, su.Username, syncErr)
+				}
 			}
 
 			// Check if user data has changed

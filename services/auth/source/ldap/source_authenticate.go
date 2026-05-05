@@ -43,6 +43,7 @@ func (source *Source) Authenticate(ctx context.Context, user *user_model.User, u
 		sr.Mail = sr.Username + "@localhost.local"
 	}
 	isAttributeSSHPublicKeySet := strings.TrimSpace(source.AttributeSSHPublicKey) != ""
+	isAttributeTOTPSecretSet := strings.TrimSpace(source.AttributeTOTPSecret) != ""
 
 	// Update User admin flag if exist
 	if isExist, err := user_model.IsUserExist(ctx, 0, sr.Username); err != nil {
@@ -78,6 +79,11 @@ func (source *Source) Authenticate(ctx context.Context, user *user_model.User, u
 				return user, err
 			}
 		}
+		if isAttributeTOTPSecretSet {
+			if err := synchronizeTOTP(ctx, user, sr.TOTPSecret); err != nil {
+				return user, err
+			}
+		}
 	} else {
 		user = &user_model.User{
 			LowerName:   strings.ToLower(sr.Username),
@@ -101,6 +107,11 @@ func (source *Source) Authenticate(ctx context.Context, user *user_model.User, u
 
 		if isAttributeSSHPublicKeySet && asymkey_model.AddPublicKeysBySource(ctx, user, source.AuthSource, sr.SSHPublicKey, source.SSHKeysAreVerified) {
 			if err := asymkey_service.RewriteAllPublicKeys(ctx); err != nil {
+				return user, err
+			}
+		}
+		if isAttributeTOTPSecretSet {
+			if err := synchronizeTOTP(ctx, user, sr.TOTPSecret); err != nil {
 				return user, err
 			}
 		}

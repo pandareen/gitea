@@ -43,6 +43,7 @@ type Source struct {
 	AttributeMail         string // E-mail attribute
 	AttributesInBind      bool   // fetch attributes in bind context (not user)
 	AttributeSSHPublicKey string // LDAP SSH Public Key attribute
+	AttributeTOTPSecret   string // LDAP TOTP Secret attribute
 	AttributeAvatar       string
 	SSHKeysAreVerified    bool   // true if SSH keys in LDAP are verified
 	SearchPageSize        uint32 // Search with paging page size
@@ -111,6 +112,11 @@ func (source *Source) UseTLS() bool {
 // ProvidesSSHKeys returns if this source provides SSH Keys
 func (source *Source) ProvidesSSHKeys() bool {
 	return strings.TrimSpace(source.AttributeSSHPublicKey) != ""
+}
+
+// ProvidesTOTPSecret returns if this source provides TOTP secrets.
+func (source *Source) ProvidesTOTPSecret() bool {
+	return strings.TrimSpace(source.AttributeTOTPSecret) != ""
 }
 
 func init() {

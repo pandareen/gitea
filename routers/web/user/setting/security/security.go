@@ -14,6 +14,7 @@ import (
 	"code.gitea.io/gitea/modules/optional"
 	"code.gitea.io/gitea/modules/setting"
 	"code.gitea.io/gitea/modules/templates"
+	ldap_service "code.gitea.io/gitea/services/auth/source/ldap"
 	"code.gitea.io/gitea/services/auth/source/oauth2"
 	"code.gitea.io/gitea/services/context"
 )
@@ -72,6 +73,12 @@ func loadSecurityData(ctx *context.Context) {
 		return
 	}
 	ctx.Data["TOTPEnrolled"] = enrolled
+	managedByLDAP, err := ldap_service.UserHasLDAPManagedTOTP(ctx, ctx.Doer)
+	if err != nil {
+		ctx.ServerError("UserHasLDAPManagedTOTP", err)
+		return
+	}
+	ctx.Data["TOTPManagedByLDAP"] = managedByLDAP
 
 	credentials, err := auth_model.GetWebAuthnCredentialsByUID(ctx, ctx.Doer.ID)
 	if err != nil {

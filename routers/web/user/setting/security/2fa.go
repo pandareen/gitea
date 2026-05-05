@@ -18,6 +18,7 @@ import (
 	"code.gitea.io/gitea/modules/session"
 	"code.gitea.io/gitea/modules/setting"
 	"code.gitea.io/gitea/modules/web"
+	ldap_service "code.gitea.io/gitea/services/auth/source/ldap"
 	"code.gitea.io/gitea/services/context"
 	"code.gitea.io/gitea/services/forms"
 
@@ -29,6 +30,10 @@ import (
 func RegenerateScratchTwoFactor(ctx *context.Context) {
 	if user_model.IsFeatureDisabledWithLoginType(ctx.Doer, setting.UserFeatureManageMFA) {
 		ctx.HTTPError(http.StatusNotFound)
+		return
+	}
+
+	if blockIfLDAPManagedTOTP(ctx) {
 		return
 	}
 
@@ -65,6 +70,10 @@ func RegenerateScratchTwoFactor(ctx *context.Context) {
 func DisableTwoFactor(ctx *context.Context) {
 	if user_model.IsFeatureDisabledWithLoginType(ctx.Doer, setting.UserFeatureManageMFA) {
 		ctx.HTTPError(http.StatusNotFound)
+		return
+	}
+
+	if blockIfLDAPManagedTOTP(ctx) {
 		return
 	}
 
@@ -162,6 +171,10 @@ func EnrollTwoFactor(ctx *context.Context) {
 		return
 	}
 
+	if blockIfLDAPManagedTOTP(ctx) {
+		return
+	}
+
 	ctx.Data["Title"] = ctx.Tr("settings_title")
 	ctx.Data["PageIsSettingsSecurity"] = true
 	ctx.Data["ShowTwoFactorRequiredMessage"] = false
@@ -190,6 +203,10 @@ func EnrollTwoFactor(ctx *context.Context) {
 func EnrollTwoFactorPost(ctx *context.Context) {
 	if user_model.IsFeatureDisabledWithLoginType(ctx.Doer, setting.UserFeatureManageMFA) {
 		ctx.HTTPError(http.StatusNotFound)
+		return
+	}
+
+	if blockIfLDAPManagedTOTP(ctx) {
 		return
 	}
 
@@ -277,4 +294,18 @@ func EnrollTwoFactorPost(ctx *context.Context) {
 
 	ctx.Flash.Success(ctx.Tr("settings.twofa_enrolled", token))
 	ctx.Redirect(setting.AppSubURL + "/user/settings/security")
+}
+
+func blockIfLDAPManagedTOTP(ctx *context.Context) bool {
+	managedByLDAP, err := ldap_service.UserHasLDAPManagedTOTP(ctx, ctx.Doer)
+	if err != nil {
+		ctx.ServerError("UserHasLDAPManagedTOTP", err)
+		return true
+	}
+	if managedByLDAP {
+		ctx.Flash.Error(ctx.Tr("settings.twofa_managed_by_ldap"))
+		ctx.Redirect(setting.AppSubURL + "/user/settings/security")
+		return true
+	}
+	return false
 }

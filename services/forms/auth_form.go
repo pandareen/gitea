@@ -32,6 +32,7 @@ type AuthenticationForm struct {
 	AttributeSurname      string
 	AttributeMail         string
 	AttributeSSHPublicKey string
+	AttributeTOTPSecret   string
 	AttributeAvatar       string
 	SSHKeysAreVerified    bool
 	AttributesInBind      bool

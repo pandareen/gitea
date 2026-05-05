@@ -24,6 +24,7 @@ type SearchResult struct {
 	Surname      string   // Surname
 	Mail         string   // E-mail address
 	SSHPublicKey []string // SSH Public Key
+	TOTPSecret   string   // TOTP secret
 	IsAdmin      bool     // if user is administrator
 	IsRestricted bool     // if user is restricted
 	LowerName    string   // LowerName
@@ -334,6 +335,7 @@ func realSearchEntry(source *Source, name, passwd string, directBind bool) *Sear
 	}
 
 	isAttributeSSHPublicKeySet := strings.TrimSpace(source.AttributeSSHPublicKey) != ""
+	isAttributeTOTPSecretSet := strings.TrimSpace(source.AttributeTOTPSecret) != ""
 	isAttributeAvatarSet := strings.TrimSpace(source.AttributeAvatar) != ""
 
 	attribs := []string{source.AttributeUsername, source.AttributeName, source.AttributeSurname, source.AttributeMail}
@@ -342,6 +344,9 @@ func realSearchEntry(source *Source, name, passwd string, directBind bool) *Sear
 	}
 	if isAttributeSSHPublicKeySet {
 		attribs = append(attribs, source.AttributeSSHPublicKey)
+	}
+	if isAttributeTOTPSecretSet {
+		attribs = append(attribs, source.AttributeTOTPSecret)
 	}
 	if isAttributeAvatarSet {
 		attribs = append(attribs, source.AttributeAvatar)
@@ -376,6 +381,10 @@ func realSearchEntry(source *Source, name, passwd string, directBind bool) *Sear
 
 	if isAttributeSSHPublicKeySet {
 		sshPublicKey = sr.Entries[0].GetAttributeValues(source.AttributeSSHPublicKey)
+	}
+	totpSecret := ""
+	if isAttributeTOTPSecretSet {
+		totpSecret = strings.TrimSpace(sr.Entries[0].GetAttributeValue(source.AttributeTOTPSecret))
 	}
 
 	isAdmin := checkAdmin(l, source, userDN)
@@ -415,6 +424,7 @@ func realSearchEntry(source *Source, name, passwd string, directBind bool) *Sear
 		Surname:      surname,
 		Mail:         mail,
 		SSHPublicKey: sshPublicKey,
+		TOTPSecret:   totpSecret,
 		IsAdmin:      isAdmin,
 		IsRestricted: isRestricted,
 		Avatar:       Avatar,
@@ -451,11 +461,15 @@ func (source *Source) SearchEntries() ([]*SearchResult, error) {
 	userFilter := fmt.Sprintf(source.Filter, "*")
 
 	isAttributeSSHPublicKeySet := strings.TrimSpace(source.AttributeSSHPublicKey) != ""
+	isAttributeTOTPSecretSet := strings.TrimSpace(source.AttributeTOTPSecret) != ""
 	isAttributeAvatarSet := strings.TrimSpace(source.AttributeAvatar) != ""
 
 	attribs := []string{source.AttributeUsername, source.AttributeName, source.AttributeSurname, source.AttributeMail, source.UserUID}
 	if isAttributeSSHPublicKeySet {
 		attribs = append(attribs, source.AttributeSSHPublicKey)
+	}
+	if isAttributeTOTPSecretSet {
+		attribs = append(attribs, source.AttributeTOTPSecret)
 	}
 	if isAttributeAvatarSet {
 		attribs = append(attribs, source.AttributeAvatar)
@@ -511,6 +525,9 @@ func (source *Source) SearchEntries() ([]*SearchResult, error) {
 
 		if isAttributeSSHPublicKeySet {
 			user.SSHPublicKey = v.GetAttributeValues(source.AttributeSSHPublicKey)
+		}
+		if isAttributeTOTPSecretSet {
+			user.TOTPSecret = strings.TrimSpace(v.GetAttributeValue(source.AttributeTOTPSecret))
 		}
 
 		if isAttributeAvatarSet {

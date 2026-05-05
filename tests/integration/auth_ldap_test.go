@@ -16,6 +16,7 @@ import (
 	"code.gitea.io/gitea/models/organization"
 	"code.gitea.io/gitea/models/unittest"
 	user_model "code.gitea.io/gitea/models/user"
+	"code.gitea.io/gitea/modules/setting"
 	"code.gitea.io/gitea/modules/structs"
 	"code.gitea.io/gitea/modules/test"
 	"code.gitea.io/gitea/modules/translation"
@@ -55,6 +56,8 @@ func TestAuthLDAP(t *testing.T) {
 	t.Run("PreventInvalidGroupTeamMap", testLDAPPreventInvalidGroupTeamMap)
 	t.Run("AuthChange", testLDAPAuthChange)
 	t.Run("EmailSignin", testLDAPEmailSignin)
+	t.Run("ManagedTOTPRequiresEnrollmentWhenEnforced", testLDAPManagedTOTPRequiresEnrollmentWhenEnforced)
+	t.Run("ManagedTOTPWithSecretTriggersTwoFactorFlow", testLDAPManagedTOTPWithSecretTriggersTwoFactorFlow)
 
 	hasRealServer, _ := strconv.ParseBool(os.Getenv("TEST_LDAP"))
 	if hasRealServer {
@@ -152,6 +155,7 @@ func (te *ldapTestEnv) buildAuthSourcePayload(m map[string]string) map[string]st
 		"attribute_surname":        "sn",
 		"attribute_mail":           "mail",
 		"attribute_ssh_public_key": "",
+		"attribute_totp_secret":    "",
 		"is_sync_enabled":          "on",
 		"is_active":                "on",
 		"groups_enabled":           "on",
@@ -547,4 +551,90 @@ func testLDAPEmailSignin(t *testing.T) {
 	assert.Equal(t, u.UserName, htmlDoc.GetInputValueByName("name"))
 	assert.Equal(t, u.FullName, htmlDoc.GetInputValueByName("full_name"))
 	assert.Equal(t, u.Email, htmlDoc.Find("#signed-user-email").Text())
+}
+
+func testLDAPManagedTOTPRequiresEnrollmentWhenEnforced(t *testing.T) {
+	defer tests.PrintCurrentTest(t)()
+
+	te := ldapTestEnv{
+		gitLDAPUsers: []ldapUser{
+			{
+				UserName: "u2",
+				Password: "xx",
+				FullName: "user 2",
+				Email:    "u2@gitea.com",
+			},
+		},
+		serverHost: "mock-host",
+		serverPort: "mock-port",
+	}
+
+	defer test.MockVariableValue(&setting.TwoFactorAuthEnforced, true)()
+	defer test.MockVariableValue(&ldap.MockedSearchEntry, func(source *ldap.Source, name, passwd string, directBind bool) *ldap.SearchResult {
+		for _, user := range te.gitLDAPUsers {
+			if user.UserName == name && user.Password == passwd {
+				return &ldap.SearchResult{
+					Username:  user.UserName,
+					Mail:      user.Email,
+					LowerName: strings.ToLower(user.UserName),
+					// Intentionally empty: managed TOTP attribute exists, but no value for this LDAP user.
+					TOTPSecret: "",
+				}
+			}
+		}
+		return nil
+	})()
+	defer tests.PrepareTestEnv(t)()
+
+	te.setupAuthSource(t, te.buildAuthSourcePayload(map[string]string{
+		"attribute_totp_secret": "totpSecret",
+	}))
+
+	u := te.gitLDAPUsers[0]
+	testLoginFailed(t, u.UserName, u.Password, translation.NewLocale("en-US").TrString("auth.twofa_required"))
+}
+
+func testLDAPManagedTOTPWithSecretTriggersTwoFactorFlow(t *testing.T) {
+	defer tests.PrintCurrentTest(t)()
+
+	te := ldapTestEnv{
+		gitLDAPUsers: []ldapUser{
+			{
+				UserName: "u3",
+				Password: "xx",
+				FullName: "user 3",
+				Email:    "u3@gitea.com",
+			},
+		},
+		serverHost: "mock-host",
+		serverPort: "mock-port",
+	}
+
+	defer test.MockVariableValue(&setting.TwoFactorAuthEnforced, true)()
+	defer test.MockVariableValue(&ldap.MockedSearchEntry, func(source *ldap.Source, name, passwd string, directBind bool) *ldap.SearchResult {
+		for _, user := range te.gitLDAPUsers {
+			if user.UserName == name && user.Password == passwd {
+				return &ldap.SearchResult{
+					Username:   user.UserName,
+					Mail:       user.Email,
+					LowerName:  strings.ToLower(user.UserName),
+					TOTPSecret: "JBSWY3DPEHPK3PXP",
+				}
+			}
+		}
+		return nil
+	})()
+	defer tests.PrepareTestEnv(t)()
+
+	te.setupAuthSource(t, te.buildAuthSourcePayload(map[string]string{
+		"attribute_totp_secret": "totpSecret",
+	}))
+
+	session := emptyTestSession(t)
+	req := NewRequestWithValues(t, "POST", "/user/login", map[string]string{
+		"user_name": te.gitLDAPUsers[0].UserName,
+		"password":  te.gitLDAPUsers[0].Password,
+	})
+	resp := session.MakeRequest(t, req, http.StatusSeeOther)
+	assert.Equal(t, "/user/two_factor", resp.Header().Get("Location"))
 }

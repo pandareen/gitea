@@ -135,6 +135,7 @@ func parseLDAPConfig(form forms.AuthenticationForm) *ldap.Source {
 		AttributeMail:         form.AttributeMail,
 		AttributesInBind:      form.AttributesInBind,
 		AttributeSSHPublicKey: form.AttributeSSHPublicKey,
+		AttributeTOTPSecret:   form.AttributeTOTPSecret,
 		AttributeAvatar:       form.AttributeAvatar,
 		SSHKeysAreVerified:    form.SSHKeysAreVerified,
 		SearchPageSize:        pageSize,

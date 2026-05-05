@@ -55,6 +55,7 @@ type TwoFactor struct {
 	ScratchSalt      string
 	ScratchHash      string
 	LastUsedPasscode string             `xorm:"VARCHAR(10)"`
+	IsEnrolledByLDAP bool               `xorm:"NOT NULL DEFAULT false"`
 	CreatedUnix      timeutil.TimeStamp `xorm:"INDEX created"`
 	UpdatedUnix      timeutil.TimeStamp `xorm:"INDEX updated"`
 }
